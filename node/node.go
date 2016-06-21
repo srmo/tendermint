@@ -23,10 +23,12 @@ import (
 	mempl "github.com/tendermint/tendermint/mempool"
 	"github.com/tendermint/tendermint/proxy"
 	rpccore "github.com/tendermint/tendermint/rpc/core"
+	grpccore "github.com/tendermint/tendermint/rpc/grpc"
 	sm "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/types"
 	"github.com/tendermint/tendermint/version"
 	tmspcli "github.com/tendermint/tmsp/client"
+	"github.com/tendermint/tmsp/example/counter"
 	"github.com/tendermint/tmsp/example/dummy"
 	"github.com/tendermint/tmsp/example/nil"
 )
@@ -201,6 +203,17 @@ func (n *Node) StartRPC() ([]net.Listener, error) {
 		}
 		listeners[i] = listener
 	}
+
+	// we expose a simplified api over grpc for convenience to app devs
+	grpcListenAddr := n.config.GetString("grpc_laddr")
+	if grpcListenAddr != "" {
+		listener, err := grpccore.StartGRPCServer(grpcListenAddr)
+		if err != nil {
+			return nil, err
+		}
+		listeners = append(listeners, listener)
+	}
+
 	return listeners, nil
 }
 
@@ -281,6 +294,10 @@ func GetProxyApp(addr, transport string, hash []byte) (proxyAppConn proxy.AppCon
 		proxyAppConn = tmspcli.NewLocalClient(mtx, app)
 	case "dummy":
 		app := dummy.NewDummyApplication()
+		mtx := new(sync.Mutex)
+		proxyAppConn = tmspcli.NewLocalClient(mtx, app)
+	case "counter":
+		app := counter.NewCounterApplication(true)
 		mtx := new(sync.Mutex)
 		proxyAppConn = tmspcli.NewLocalClient(mtx, app)
 	default:
