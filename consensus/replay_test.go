@@ -53,8 +53,8 @@ import (
 	```
 */
 
-var testLog = `
-{"time":"2016-08-20T22:06:16.075Z","msg":[3,{"duration":0,"height":1,"round":0,"step":1}]}
+// must not begin with new line
+var testLog = `{"time":"2016-08-20T22:06:16.075Z","msg":[3,{"duration":0,"height":1,"round":0,"step":1}]}
 {"time":"2016-08-20T22:06:16.077Z","msg":[1,{"height":1,"round":0,"step":"RoundStepPropose"}]}
 {"time":"2016-08-20T22:06:16.077Z","msg":[2,{"msg":[17,{"Proposal":{"height":1,"round":0,"block_parts_header":{"total":1,"hash":"BC874710A7514C59E4F460A9621C538CF82C160A"},"pol_round":-1,"pol_block_id":{"hash":"","parts":{"total":0,"hash":""}},"signature":"E5ABDE10A4D3819184850AF85207DFD2DB8A9D3C540C4313C22DFA470AE99CDF43E5511E4FB7AAC040134E27AA8FC42869C655B4D812175ACAC32BAB7E51C906"}}],"peer_key":""}]}
 {"time":"2016-08-20T22:06:16.078Z","msg":[2,{"msg":[19,{"Height":1,"Round":0,"Part":{"index":0,"bytes":"0101010F74656E6465726D696E745F746573740101146CA357E0F5D8C00000000000000114C4B01D3810579550997AC5641E759E20D99B51C10001000100","proof":{"aunts":[]}}}],"peer_key":""}]}
@@ -63,6 +63,12 @@ var testLog = `
 {"time":"2016-08-20T22:06:16.080Z","msg":[1,{"height":1,"round":0,"step":"RoundStepPrecommit"}]}
 {"time":"2016-08-20T22:06:16.080Z","msg":[2,{"msg":[20,{"Vote":{"validator_address":"D028C9981F7A87F3093672BF0D5B0E2A1B3ED456","validator_index":0,"height":1,"round":0,"type":2,"block_id":{"hash":"D98DD4077A50690BAF670E26FD8E56AFC6ACFF4D","parts":{"total":1,"hash":"BC874710A7514C59E4F460A9621C538CF82C160A"}},"signature":"3028C891510029A00859E4C56E4D0836C9B3E1F5A8F7CFF9E1B36D40E7727A7A64615ACACF1791C453C87E9FBFE66D978566DA92A12C6ABD7307FF5D1430A408"}}],"peer_key":""}]}
 `
+
+func init() {
+	if strings.HasPrefix(testLog, "\n") {
+		panic("testLog should not begin with new line")
+	}
+}
 
 // map lines in the above wal to privVal step
 var mapPrivValStep = map[int]int8{
@@ -113,9 +119,13 @@ func runReplayTest(t *testing.T, cs *ConsensusState, fileName string, newBlockCh
 	cs.Stop()
 }
 
+func toPV(pv PrivValidator) *types.PrivValidator {
+	return pv.(*types.PrivValidator)
+}
+
 func setupReplayTest(nLines int, crashAfter bool) (*ConsensusState, chan interface{}, string, string) {
 	fmt.Println("-------------------------------------")
-	log.Notice(Fmt("Starting replay test of %d lines of WAL (crash before write)", nLines))
+	log.Notice(Fmt("Starting replay test of %d lines of WAL. Crash after = %v", nLines, crashAfter))
 
 	lineStep := nLines
 	if crashAfter {
@@ -131,10 +141,10 @@ func setupReplayTest(nLines int, crashAfter bool) (*ConsensusState, chan interfa
 	cs := fixedConsensusState()
 
 	// set the last step according to when we crashed vs the wal
-	cs.privValidator.LastHeight = 1 // first block
-	cs.privValidator.LastStep = mapPrivValStep[lineStep]
+	toPV(cs.privValidator).LastHeight = 1 // first block
+	toPV(cs.privValidator).LastStep = mapPrivValStep[lineStep]
 
-	fmt.Println("LAST STEP", cs.privValidator.LastStep)
+	log.Warn("setupReplayTest", "LastStep", toPV(cs.privValidator).LastStep)
 
 	newBlockCh := subscribeToEvent(cs.evsw, "tester", types.EventStringNewBlock(), 1)
 
@@ -167,8 +177,8 @@ func TestReplayCrashBeforeWritePropose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error reading json data: %v", err)
 	}
-	cs.privValidator.LastSignBytes = types.SignBytes(cs.state.ChainID, proposal.Proposal)
-	cs.privValidator.LastSignature = proposal.Proposal.Signature
+	toPV(cs.privValidator).LastSignBytes = types.SignBytes(cs.state.ChainID, proposal.Proposal)
+	toPV(cs.privValidator).LastSignature = proposal.Proposal.Signature
 	runReplayTest(t, cs, f, newBlockCh)
 }
 
@@ -183,8 +193,8 @@ func TestReplayCrashBeforeWritePrevote(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Error reading json data: %v", err)
 		}
-		cs.privValidator.LastSignBytes = types.SignBytes(cs.state.ChainID, vote.Vote)
-		cs.privValidator.LastSignature = vote.Vote.Signature
+		toPV(cs.privValidator).LastSignBytes = types.SignBytes(cs.state.ChainID, vote.Vote)
+		toPV(cs.privValidator).LastSignature = vote.Vote.Signature
 	})
 	runReplayTest(t, cs, f, newBlockCh)
 }
@@ -200,8 +210,8 @@ func TestReplayCrashBeforeWritePrecommit(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Error reading json data: %v", err)
 		}
-		cs.privValidator.LastSignBytes = types.SignBytes(cs.state.ChainID, vote.Vote)
-		cs.privValidator.LastSignature = vote.Vote.Signature
+		toPV(cs.privValidator).LastSignBytes = types.SignBytes(cs.state.ChainID, vote.Vote)
+		toPV(cs.privValidator).LastSignature = vote.Vote.Signature
 	})
 	runReplayTest(t, cs, f, newBlockCh)
 }
