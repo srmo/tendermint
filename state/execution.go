@@ -44,8 +44,7 @@ func (s *State) ExecBlock(eventCache events.Fireable, proxyAppConn proxy.AppConn
 	// All good!
 	nextValSet.IncrementAccum(1)
 	s.LastBlockHeight = block.Height
-	s.LastBlockHash = block.Hash()
-	s.LastBlockParts = blockPartsHeader
+	s.LastBlockID = types.BlockID{block.Hash(), blockPartsHeader}
 	s.LastBlockTime = block.Time
 	s.Validators = nextValSet
 	s.LastValidators = valSet
@@ -105,7 +104,7 @@ func (s *State) execBlockOnProxyApp(eventCache events.Fireable, proxyAppConn pro
 
 func (s *State) validateBlock(block *types.Block) error {
 	// Basic block validation.
-	err := block.ValidateBasic(s.ChainID, s.LastBlockHeight, s.LastBlockHash, s.LastBlockParts, s.LastBlockTime, s.AppHash)
+	err := block.ValidateBasic(s.ChainID, s.LastBlockHeight, s.LastBlockID, s.LastBlockTime, s.AppHash)
 	if err != nil {
 		return err
 	}
@@ -121,7 +120,7 @@ func (s *State) validateBlock(block *types.Block) error {
 				s.LastValidators.Size(), len(block.LastCommit.Precommits))
 		}
 		err := s.LastValidators.VerifyCommit(
-			s.ChainID, s.LastBlockHash, s.LastBlockParts, block.Height-1, block.LastCommit)
+			s.ChainID, s.LastBlockID, block.Height-1, block.LastCommit)
 		if err != nil {
 			return err
 		}
