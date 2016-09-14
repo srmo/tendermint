@@ -13,6 +13,7 @@ import (
 	dbm "github.com/tendermint/go-db"
 	"github.com/tendermint/go-events"
 	bc "github.com/tendermint/tendermint/blockchain"
+	"github.com/tendermint/tendermint/config/tendermint_test"
 	mempl "github.com/tendermint/tendermint/mempool"
 	sm "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/types"
@@ -197,7 +198,7 @@ func fixedConsensusState() *ConsensusState {
 	return cs
 }
 
-func newConsensusState(state *sm.State, pv *types.PrivValidator, app tmsp.Application) *ConsensusState {
+func newConsensusStateWithConfig(thisConfig cfg.Config, state *sm.State, pv *types.PrivValidator, app tmsp.Application) *ConsensusState {
 	// Get BlockStore
 	blockDB := dbm.NewMemDB()
 	blockStore := bc.NewBlockStore(blockDB)
@@ -208,16 +209,20 @@ func newConsensusState(state *sm.State, pv *types.PrivValidator, app tmsp.Applic
 	proxyAppConnCon := tmspcli.NewLocalClient(mtx, app)
 
 	// Make Mempool
-	mempool := mempl.NewMempool(config, proxyAppConnMem)
+	mempool := mempl.NewMempool(thisConfig, proxyAppConnMem)
 
 	// Make ConsensusReactor
-	cs := NewConsensusState(config, state, proxyAppConnCon, blockStore, mempool)
+	cs := NewConsensusState(thisConfig, state, proxyAppConnCon, blockStore, mempool)
 	cs.SetPrivValidator(pv)
 
 	evsw := events.NewEventSwitch()
 	cs.SetEventSwitch(evsw)
 	evsw.Start()
 	return cs
+}
+
+func newConsensusState(state *sm.State, pv *types.PrivValidator, app tmsp.Application) *ConsensusState {
+	return newConsensusStateWithConfig(config, state, pv, app)
 }
 
 func randConsensusState(nValidators int) (*ConsensusState, []*validatorStub) {
@@ -244,13 +249,10 @@ func randConsensusNet(nValidators int) []*ConsensusState {
 		db := dbm.NewMemDB() // each state needs its own db
 		state := sm.MakeGenesisState(db, genDoc)
 		state.Save()
-		css[i] = newConsensusState(state, privVals[i], counter.NewCounterApplication(true))
+		thisConfig := tendermint_test.ResetConfig(Fmt("consensus_reactor_test_%d", i))
+		EnsureDir(thisConfig.GetString("db_dir"), 0700) // dir for wal
+		css[i] = newConsensusStateWithConfig(thisConfig, state, privVals[i], counter.NewCounterApplication(true))
 	}
-
-	// we use memdb, but need a dir for the cswal.
-	// in this case they all write to the same one but we dont care
-	// NOTE: they all share a pointer to the same config object!
-	EnsureDir(css[0].config.GetString("db_dir"), 0700)
 	return css
 }
 
